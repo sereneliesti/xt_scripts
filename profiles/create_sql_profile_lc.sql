@@ -16,7 +16,7 @@ accept plan_hv prompt "Plan hash value[&plan_hv]: " default "&plan_hv";
 col sql_id          clear;
 col plan_hash_value clear;
 
-accept force_match prompt "Force_match[1]: " default 1;
+accept force_match prompt "Force_match[true/false]: " default "true";
 accept description prompt "Description[from lc]: " default "from lc";
 accept category    prompt "Category[DEFAULT]: " default "DEFAULT";
 
@@ -25,7 +25,7 @@ declare
    -- params:
     p_sql_id          varchar2(13):= '&sqlid';
     p_plan_hash_value number:=&plan_hv+0;
-    p_force_match     int:= nvl(&force_match+0,1);
+    p_force_match     boolean:= &force_match;
     p_description     varchar2(50):=nvl('&description','profile for &sqlid');
     p_category        varchar2(30):=nvl('&category','DEFAULT');
     
@@ -35,8 +35,7 @@ declare
     cl_sql_text      clob;
     l_profile_name   varchar2(30);
     l_dbid           number;
-    l_force_match    boolean;
-    
+        
     e_privs          exception;
     pragma exception_init(e_privs, -38171);
     
@@ -50,15 +49,12 @@ declare
        dbms_output.put_line('========================================================');
     end hr;
 begin
-    -- заполняем исходные переменные:
+    -- input variables:
     select dbid into l_dbid from v$database;
 --    l_dbid := :dbid;
     
     l_profile_name := 'PROF_'||p_sql_id;
-    l_force_match:=case p_force_match 
-                        when 1 then TRUE
-                        else false
-                   end;
+    
    begin
       dbms_sqltune.drop_sql_profile(l_profile_name);
    exception when others then
@@ -66,7 +62,7 @@ begin
    end;
    --ar_profile_hints:=sys.sqlprof_attr('LEADING(P)','USE_CONCAT(@SEL$2)');
    --/*
-   -- получаем хинты запроса:
+   -- outline hints:
     select
         d.hint
         bulk collect into ar_profile_hints
@@ -97,7 +93,7 @@ begin
     for i in ar_profile_hints.first..ar_profile_hints.last loop
        dbms_output.put_line(ar_profile_hints(i));
     end loop;
-    -- Получаем текст запроса:
+    -- query text:
     select 
        coalesce(
           (select s1.sql_fulltext from v$sqlarea        s1 where p_sql_id = s1.sql_id)
@@ -113,7 +109,7 @@ begin
         ,description => p_description
         ,category    => nvl(p_category,'DEFAULT')
         ,replace     => true
-        ,force_match => l_force_match
+        ,force_match => p_force_match
     );
     
     hr;
